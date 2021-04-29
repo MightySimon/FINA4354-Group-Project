@@ -10,7 +10,7 @@ options(scipen = 999) # <- prevent using scientific notation
 
 #===============================================================================
 
-# 1 - Library preparation
+# 1 - Library preparation (repeat)
 # Check if client's computer has the library downloaded,
 # then load the required library
 list.of.library <- c('xts', 'quantmod', 'ggplot2', 'lubridate')
@@ -22,78 +22,23 @@ for (i in list.of.library) {
   library(i, character.only = TRUE)
 }
 
-# Set working directory if needed
-# !!! In the following code, we assume the working directory is
-#     the "code" folder under repository root !!!
-
 rm(list.of.library, i) #Free up memory
 
 #===============================================================================
 
-# 2 - Data processing
-# 2.1 - S&P500 data downloading
-# S&P500 Index: Underlying
-# 10 year for graph plotting, 3 year for parameter calculation
-SP500.raw.full <- na.locf(getSymbols("^GSPC",
-                                     from = Sys.Date() - years(10),
-                                     auto.assign = FALSE))
-# S&P500 Total Return Index:
-SP500TR.raw <- na.locf(getSymbols("^SP500TR", 
-                                  from = Sys.Date() - years(3),
-                                  auto.assign = FALSE))
-# S&P500 ETF: Hedging
-SPY <- na.locf(getSymbols("SPY",
-                          from = Sys.Date() - years(3),
-                          auto.assign = FALSE))
-
-#-------------------------------------------------------------------------------
-
-# 2.2 - risk-free rate downloading
-# We prepare the 1m, 3m, 6m, 1y version of risk-free rate
-# If we change the tenor t, we can adopt a different RF rate below
-#DGS1MO <- na.locf(getSymbols("DGS1MO", src = "FRED", auto.assign = FALSE))
-#DGS3MO <- na.locf(getSymbols("DGS3MO", src = "FRED", auto.assign = FALSE))
-DGS6MO <- na.locf(getSymbols("DGS6MO", src = "FRED", auto.assign = FALSE))
-#DGS1YR <- na.locf(getSymbols("DGS1", src = "FRED", auto.assign = FALSE))
-
-#-------------------------------------------------------------------------------
-
-# 2.3 - Storing data to local repository
-
-# RDS file saving:
-data.path <- "../data"
-saveRDS(SP500.raw.full, file = file.path(data.path, 'SP500.raw.full.rds'))
-saveRDS(SP500TR.raw, file = file.path(data.path, 'SP500TR.raw.rds'))
-saveRDS(SPY, file = file.path(data.path, 'SPY.rds'))
-saveRDS(DGS6MO, file = file.path(data.path, 'DGS6MO.rds'))
-
-# CSV saving (more visible data):
-# change the xts into dataframe
-data.path <- "../data"
-write.csv(data.frame(row.names = index(SP500.raw.full), 
-                     coredata(SP500.raw.full)),
-          file = file.path(data.path, 'SP500.raw.full.csv'))
-write.csv(data.frame(row.names = index(SP500TR.raw), coredata(SP500TR.raw)),
-          file = file.path(data.path, 'SP500TR.raw.csv'))
-write.csv(data.frame(row.names = index(SPY), coredata(SPY)),
-          file = file.path(data.path, 'SPY.csv'))
-write.csv(data.frame(row.names = index(DGS6MO), coredata(DGS6MO)),
-          file = file.path(data.path, 'DGS6MO.csv'))
-
-rm(data.path)
-
-#-------------------------------------------------------------------------------
-
-# 2.4 - Loading data from local repository
-
-# RDS file loading:
+# 2 - Loading data from local repository
+# 2.1 - RDS file loading:
 data.path <- "../data"
 SP500.raw.full <- readRDS(file = file.path(data.path, 'SP500.raw.full.rds'))
 SP500TR.raw <- readRDS(file = file.path(data.path, 'SP500TR.raw.rds'))
 SPY <- readRDS(file = file.path(data.path, 'SPY.rds'))
 DGS6MO <- readRDS(file = file.path(data.path, 'DGS6MO.rds'))
 
-# CSV file loading:
+rm(data.path)
+
+#-------------------------------------------------------------------------------
+
+# 2.2 - CSV file loading:
 data.path <- "../data"
 SP500.raw.full <- as.xts(read.csv(file = file.path(data.path, 
                                                    'SP500.raw.full.csv'),
@@ -174,19 +119,19 @@ cat("g1 =", g1, "\t", "g2 =", g2, "\t", "g3 =", g3, "\n")
 # r = Expected Return, q = Dividend Yield
 # sigma = volatility, t = time to maturity
 
-# Value of d1
+# 4.1.1 - Value of d1
 fd1 <- function(S, K, r, q, sigma, t) {
   d1 <- (log(S / K) + (r - q + 0.5 * sigma ^ 2) * t) / (sigma * sqrt(t))
   return(d1)
 }
 
-# Value of d2
+# 4.1.2 - Value of d2
 fd2 <- function(S, K, r, q, sigma, t) {
   d2 <- fd1(S, K, r, q, sigma, t) - sigma * sqrt(t)
   return(d2)
 }
 
-# Price of European call
+# 4.1.3 - Price of European call
 fBS.call.price <- function(S, K, r, q, sigma, t) { 
   d1 <- fd1(S, K, r, q, sigma, t)
   d2 <- fd2(S, K, r, q, sigma, t)
@@ -194,7 +139,7 @@ fBS.call.price <- function(S, K, r, q, sigma, t) {
   return(price)
 }
 
-# Price of European put
+# 4.1.4 - Price of European put
 fBS.put.price <- function(S, K, r, q, sigma, t) {
   d1 <- fd1(S, K, r, q, sigma, t)
   d2 <- fd2(S, K, r, q, sigma, t)
@@ -202,7 +147,7 @@ fBS.put.price <- function(S, K, r, q, sigma, t) {
   return(price)
 }
 
-# Price of Down-and-In Barrier Put Option
+# 4.1.5 - Price of Down-and-In Barrier Put Option
 # Barrier (L) = l1 * S, Strike (K) = l2 * S
 fBS.DI.put.price <- function(S, K, L, r, q, sigma, t) {
   const <- (L / S) ^ (2 * (r - q - sigma ^ 2 /2) / (sigma ^ 2))
@@ -216,7 +161,7 @@ fBS.DI.put.price <- function(S, K, L, r, q, sigma, t) {
   return(price)
 }
 
-# Price of digital call option
+# 4.1.6 - Price of digital call option
 fBS.digital.call.price <- function(S, K, r, q, sigma, t) {
   price <- exp(-r * t) * pnorm(fd2(S, K, r, q, sigma, t))
   return(price)
@@ -266,7 +211,7 @@ cat("Total price / S =", total.price / S, "\n")
 # delta is change of option price against change of underlying price
 # In this section, t = tenor, tau = current time = 0
 
-# 5.1 - Delta of European Call/Put at tau = 0
+# 5.1 - Delta of European Call/Put
 # Beware of the Callput variable when using the functions 
 fBS.callput.delta <- function(CallPut, S, K, r, q, sigma, t) {
   d1 <- fd1(S, K, r, q, sigma, t)
@@ -279,12 +224,16 @@ fBS.callput.delta <- function(CallPut, S, K, r, q, sigma, t) {
   return(delta)
 }
 
+#-------------------------------------------------------------------------------
+
 # 5.2 - Delta of Digital Call
 fBS.digital.call.delta <- function(S, K, r, q, sigma, t) {
   const <- exp(-r * t) / (sigma * S * sqrt(t))
   delta <- const * dnorm(fd2(S, K, r, q, sigma, t))
   return(delta)
 }
+
+#-------------------------------------------------------------------------------
 
 # 5.3 - Delta of DI European put, by approximation approach
 fBS.DI.put.delta.approx <- function(S, K, H, r, q, sigma, t) {
@@ -293,6 +242,8 @@ fBS.DI.put.delta.approx <- function(S, K, H, r, q, sigma, t) {
   lower <- fBS.DI.put.price(S - h / 2, K, H, r, q, sigma, t)
   delta.approx <- (upper - lower) / h
 }
+
+#-------------------------------------------------------------------------------
 
 # 5.4 - Delta of DI European put, by formula
 fBS.DI.put.delta <- function(S, K, L, r, q, sigma, t) {
@@ -326,6 +277,8 @@ fBS.DI.put.delta <- function(S, K, L, r, q, sigma, t) {
   return(part1 + part2)
 }
 
+#-------------------------------------------------------------------------------
+
 # 5.5 - Calculation of component delta
 # Delta of long 1 stock is 1, trivially
 delta.DI.put <- fBS.DI.put.delta(S, l2*S, l1*S, r, q, sigma, t)
@@ -333,6 +286,8 @@ delta.DI.put.approx <- fBS.DI.put.delta.approx(S, l2*S, l1*S, r, q, sigma, t)
 delta.call <- -fBS.callput.delta('Call', S, g1*S, r, q, sigma, t)
 delta.digital.one <- fBS.digital.call.delta(S, g2*S, r, q, sigma, t)
 delta.digital.two <- fBS.digital.call.delta(S, g3*S, r, q, sigma, t)
+delta.total <- sum(1, delta.DI.put, delta.call, 
+                   h * S * delta.digital.one, h * S * delta.digital.two)
 
 cat("Delta values of each component:\n")
 cat("Long Stock:\t1\n")
@@ -342,9 +297,7 @@ cat("Long DI European Put (approximated):\t", delta.DI.put.approx, "\n")
 cat("Short European call:\t\t", delta.call, "\n")
 cat(h*S, "x Long First Digital Call(s):\t", delta.digital.one, "\n")
 cat(h*S, "x Long Second Digital Call(s):\t", delta.digital.two, "\n")
-cat("Total delta (stock position required):\t",
-    sum(1, delta.DI.put, delta.call, 
-        h * S * delta.digital.one, h * S * delta.digital.two))
+cat("Total delta (stock position required):\t", delta.total, "\n")
 
 #===============================================================================
 
@@ -427,7 +380,6 @@ results.notrigger <- data.frame(cbind(profit.stock,
 # This causes some warnings, but no impact on plotting
 results.notrigger[1:(floor(l1*S - minprice)), ] <- NA
 
-# please add points to S, l1*S, l2*S, etc
 ggplot(results.notrigger / S, aes(x = prices / S)) + 
   geom_line(linetype = "dashed", aes(y = profit.stock, color = "Stock")) + 
   geom_line(linetype = "dashed", 
@@ -450,7 +402,7 @@ ggplot(results.notrigger / S, aes(x = prices / S)) +
   ggtitle("Product Profit Percentage (R) at Maturity (Not Triggered)") + 
   xlim(0.5, 1.5) + ylim(-0.5, 0.5)
 
-ggsave("../graphs/ProfitPlotNotTriggered.png", width = 9.8, height = 8)
+ggsave("../graphs/Profit_Plot_Not_Triggered.png", width = 5.4, height = 4)
 
 #-------------------------------------------------------------------------------
 
@@ -494,7 +446,7 @@ ggplot(results.trigger / S, aes(x = prices / S)) +
   ggtitle("Product Profit Percentage (R) at Maturity (Not Triggered)") + 
   xlim(0.5, 1.5) + ylim(-0.5, 0.5)
 
-ggsave("../graphs/ProfitPlotTriggered.png", width = 9.8, height = 8)
+ggsave("../graphs/Profit_Plot_Triggered.png", width = 5.4, height = 4)
 
 #-------------------------------------------------------------------------------
 
@@ -513,8 +465,7 @@ ggplot(combined / S, aes(x = prices / S)) +
                       values = c("darkred", "black")) + 
   xlab("Underlying Price") +
   ylab("Profit") +
-  ggtitle("Product Profit Percentage (R) at Maturity, before & after triggering"
-  ) + 
+  ggtitle("Product Profit Percentage (R) at Maturity") + 
   annotate(geom = "label", x = 1, y = -0.25, size = 3, 
            label = "When the safety level is triggered") + 
   annotate(geom = 'label', x = 1.2, y = 0, size = 3,
@@ -529,7 +480,7 @@ ggplot(combined / S, aes(x = prices / S)) +
            colour = "blue") +
   xlim(0.5, 1.5) + ylim(-0.5, 0.5)
 
-ggsave("../graphs/ProfitPlotCombined.png", width = 9.8, height = 8)
+ggsave("../graphs/Profit_Plot_Combined.png", width = 5.4, height = 4)
 
 #-------------------------------------------------------------------------------
 
@@ -550,23 +501,28 @@ graph.delta.digital.two <- vector(mode = "numeric", n)
 graph.delta.overall <- vector(mode = "numeric", n)
 
 for (i in 1:n) {
-  graph.delta.DI.put[i] = fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, t)
-  graph.delta.call[i] = -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, t)
-  graph.delta.digital.one[i] = fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, t)
-  graph.delta.digital.two[i] = fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, t)
+  graph.delta.DI.put[i] = 
+    fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, t)
+  graph.delta.call[i] = 
+    -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, t)
+  graph.delta.digital.one[i] = 
+    fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, t)
+  graph.delta.digital.two[i] = 
+    fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, t)
   graph.delta.overall[i] = graph.delta.DI.put[i] + graph.delta.call[i] + 
-                          graph.delta.digital.one[i] + graph.delta.digital.two[i]
+                           graph.delta.digital.one[i] + 
+                           graph.delta.digital.two[i]
 }
+
 #-------------------------------------------------------------------------------
 
-# 6.3.2 - Delta graph
+# 6.3.2 - Delta at start date
 results.delta <- data.frame(cbind(graph.delta.DI.put, 
                                   graph.delta.call, 
                                   graph.delta.digital.one, 
                                   graph.delta.digital.two,
                                   graph.delta.overall))
 
-# please add points to S, l1*S, l2*S, etc
 ggplot(results.delta, aes(x = prices)) + 
   geom_line(linetype = "dashed", 
             aes(y = graph.delta.DI.put, color = "DI Put delta")) + 
@@ -586,8 +542,11 @@ ggplot(results.delta, aes(x = prices)) +
   xlab("Underlying Price") +
   ylab("Delta") +
   ggtitle("Delta at Start Date") 
+ggsave("../graphs/Delta_Breakdown_Beginning.png", width = 5.7, height = 4)
 
-# Delta at different maturity date
+#-------------------------------------------------------------------------------
+
+# 6.3.3 - Delta at different maturity date
 graph.delta.1day <- vector(mode = "numeric", n)
 graph.delta.1week <- vector(mode = "numeric", n)
 graph.delta.1month <- vector(mode = "numeric", n)
@@ -595,47 +554,69 @@ graph.delta.3month <- vector(mode = "numeric", n)
 graph.delta.6month <- vector(mode = "numeric", n)
 
 for (i in 1:n) {
-  graph.delta.DI.put[i] = fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 1/252)
-  graph.delta.call[i] = -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 1/252)
-  graph.delta.digital.one[i] = fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 1/252)
-  graph.delta.digital.two[i] = fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 1/252)
-  graph.delta.1day[i] = graph.delta.DI.put[i] + graph.delta.call[i] + 
+  graph.delta.DI.put[i] = 
+    fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 1/252)
+  graph.delta.call[i] = 
+    -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 1/252)
+  graph.delta.digital.one[i] = 
+    fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 1/252)
+  graph.delta.digital.two[i] = 
+    fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 1/252)
+  graph.delta.1day[i] = 
+    graph.delta.DI.put[i] + graph.delta.call[i] + 
     graph.delta.digital.one[i] + graph.delta.digital.two[i]
 }
 
 for (i in 1:n) {
-  graph.delta.DI.put[i] = fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 5/252)
-  graph.delta.call[i] = -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 5/252)
-  graph.delta.digital.one[i] = fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 5/252)
-  graph.delta.digital.two[i] = fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 5/252)
+  graph.delta.DI.put[i] = 
+    fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 5/252)
+  graph.delta.call[i] = 
+    -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 5/252)
+  graph.delta.digital.one[i] = 
+    fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 5/252)
+  graph.delta.digital.two[i] = 
+    fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 5/252)
   graph.delta.1week[i] = graph.delta.DI.put[i] + graph.delta.call[i] + 
     graph.delta.digital.one[i] + graph.delta.digital.two[i]
 }
 
 for (i in 1:n) {
-  graph.delta.DI.put[i] = fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 21/252)
-  graph.delta.call[i] = -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 21/252)
-  graph.delta.digital.one[i] = fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 21/252)
-  graph.delta.digital.two[i] = fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 21/252)
+  graph.delta.DI.put[i] = 
+    fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 21/252)
+  graph.delta.call[i] = 
+    -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 21/252)
+  graph.delta.digital.one[i] = 
+    fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 21/252)
+  graph.delta.digital.two[i] = 
+    fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 21/252)
   graph.delta.1month[i] = graph.delta.DI.put[i] + graph.delta.call[i] + 
     graph.delta.digital.one[i] + graph.delta.digital.two[i]
 }
 
 for (i in 1:n) {
-  graph.delta.DI.put[i] = fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 84/252)
-  graph.delta.call[i] = -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 84/252)
-  graph.delta.digital.one[i] = fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 84/252)
-  graph.delta.digital.two[i] = fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 84/252)
+  graph.delta.DI.put[i] = 
+    fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 84/252)
+  graph.delta.call[i] = 
+    -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 84/252)
+  graph.delta.digital.one[i] = 
+    fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 84/252)
+  graph.delta.digital.two[i] = 
+    fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 84/252)
   graph.delta.3month[i] = graph.delta.DI.put[i] + graph.delta.call[i] + 
     graph.delta.digital.one[i] + graph.delta.digital.two[i]
 }
 
 for (i in 1:n) {
-  graph.delta.DI.put[i] = fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 126/252)
-  graph.delta.call[i] = -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 126/252)
-  graph.delta.digital.one[i] = fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 126/252)
-  graph.delta.digital.two[i] = fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 126/252)
-  graph.delta.6month[i] = graph.delta.DI.put[i] + graph.delta.call[i] + 
+  graph.delta.DI.put[i] = 
+    fBS.DI.put.delta(prices[i], l2*S, l1*S, r, q, sigma, 126/252)
+  graph.delta.call[i] = 
+    -1 * fBS.callput.delta('Call', prices[i], g1*S, r, q, sigma, 126/252)
+  graph.delta.digital.one[i] = 
+    fBS.digital.call.delta(prices[i], g2*S, r, q, sigma, 126/252)
+  graph.delta.digital.two[i] = 
+    fBS.digital.call.delta(prices[i], g3*S, r, q, sigma, 126/252)
+  graph.delta.6month[i] = 
+    graph.delta.DI.put[i] + graph.delta.call[i] + 
     graph.delta.digital.one[i] + graph.delta.digital.two[i]
 }
 
@@ -663,10 +644,11 @@ ggplot(results.delta, aes(x = prices)) +
                                  "black")) + 
   xlab("Underlying Price") +
   ylab("Delta") +
-  ggtitle("Delta at Different Time to Maturitye") 
-#ggsave("../graphs/ProfitPlotNotTriggered.png", width = 9.8, height = 8)
-#-------------------------------------------------------------------------------
+  ggtitle("Delta at Different Time to Maturity")
 
+ggsave("../graphs/Delta_Different_TTM.png", width = 5.1, height = 4)
+
+#-------------------------------------------------------------------------------
 
 # cleaning up
 rm(prices)

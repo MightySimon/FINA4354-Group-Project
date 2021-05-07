@@ -193,14 +193,11 @@ cat("Long second digital call:\t", digital.two, "(h*S times)\n")
 # 4.3 - Exploration of step sizes
 
 # Each step size is h
-# If we take total product price = S (no transaction cost), then
-# h = (call - DI.put) / (digital.one + digital.two) / S
-# Alternatively: total product price = 0.98 * S (2% price as transaction cost)
+# If we take total product price = 0.98 * S (2% price as commission fee), then
 h = (call - DI.put - 0.02 * S) / (digital.one + digital.two) / S
 cat("Step size(h):", h, "\n")
 
-# check of equality
-(digital.one * h * S)
+# checking of correctness
 total.price = S + DI.put - call + (digital.one + digital.two) * h * S
 cat("Total price =", total.price, "S =", S, "\n")
 cat("Total price / S =", total.price / S, "\n")
@@ -290,11 +287,11 @@ delta.total <- sum(1, delta.DI.put, delta.call,
                    h * S * delta.digital.one, h * S * delta.digital.two)
 
 cat("Delta values of each component:\n")
-cat("Long Stock:\t1\n")
+cat("Long Stock:\t\t\t\t 1\n")
 cat("Long DI European Put (Calculated):\t", delta.DI.put, "\n")
 cat("(Or alternatively:)\n")
 cat("Long DI European Put (approximated):\t", delta.DI.put.approx, "\n")
-cat("Short European call:\t\t", delta.call, "\n")
+cat("Short European call:\t\t\t", delta.call, "\n")
 cat(h*S, "x Long First Digital Call(s):\t", delta.digital.one, "\n")
 cat(h*S, "x Long Second Digital Call(s):\t", delta.digital.two, "\n")
 cat("Total delta (stock position required):\t", delta.total, "\n")
@@ -358,14 +355,171 @@ profit.second.digital.call <- payoff.second.digital.call -
 
 #-------------------------------------------------------------------------------
 
-# 6.2.2 - Profit graph (split up) when the barrier is not triggered
+# 6.2.2 - Combined total payoff when triggered/not triggered
+# on PPT page 4,5
+# Run 6.2.1 first
+
+payoff.notrigger.overall <- rowSums(cbind(payoff.stock,
+                                          payoff.DI.put.notrigger,
+                                          payoff.call,
+                                          payoff.first.digital.call,
+                                          payoff.second.digital.call))
+
+payoff.trigger.overall <- rowSums(cbind(payoff.stock,
+                                        payoff.DI.put.trigger,
+                                        payoff.call,
+                                        payoff.first.digital.call,
+                                        payoff.second.digital.call))
+
+combined <- data.frame(cbind(payoff.trigger.overall, payoff.notrigger.overall))
+combined[1:(floor(l1*S - minprice)), 2] <- NA
+
+ggplot(combined / S, aes(x = prices / S)) + 
+  geom_line(linetype = "dashed", 
+            aes(y = payoff.notrigger.overall, color = "Before Triggering")) + 
+  geom_line(aes(y = payoff.trigger.overall, color = "After Triggering")) + 
+  scale_colour_manual("", 
+                      breaks = c("Before Triggering", "After Triggering"),
+                      values = c("darkred", "black")) + 
+  xlab("ST/S0") +
+  ylab("R") +
+  ggtitle("Product Payoff Multiplier (R) at Maturity") + 
+  annotate(geom = "label", x = 1, y = 0.75, size = 3, 
+           label = "When the safety level is triggered") + 
+  annotate(geom = 'label', x = 1.2, y = 1, size = 3,
+           label = "Ladder Step 1, 2, 3") +
+  annotate(geom = "point", x = c(l2, g1, g2, g3), 
+           y = c(l2, g1, g1 + h, g1 + 2 * h), 
+           size = 7, shape = 21,
+           fill = "transparent") +
+  annotate(geom = "segment", linetype = "dashed", 
+           x = l2, xend = l2 + 0.00000001, 
+           y = 0.5, yend = 1.5,
+           colour = "blue") +
+  xlim(0.5, 1.5) + ylim(0.5, 1.5)
+
+ggsave("../graphs/Payoff_Plot_Combined(P3,4).png", width = 5.4, height = 4)
+
+# cleanup
+rm(payoff.trigger.overall, payoff.notrigger.overall, combined)
+
+#-------------------------------------------------------------------------------
+
+# 6.2.3 - Product profit graphs (illustration) when triggered / not
+# on PPT page 7,8,9
+# Run 6.2.1 first
+
+profit.notrigger.overall <- rowSums(cbind(profit.stock,
+                                          profit.DI.put.notrigger,
+                                          profit.call,
+                                          profit.first.digital.call,
+                                          profit.second.digital.call))
+
+profit.trigger.overall <- rowSums(cbind(profit.stock,
+                                        profit.DI.put.trigger,
+                                        profit.call,
+                                        profit.first.digital.call,
+                                        profit.second.digital.call))
+
+combined2 <- data.frame(cbind(profit.trigger.overall, profit.notrigger.overall))
+combined2[1:(floor(l1*S - minprice)), 2] <- NA
+
+#-------------------------------------------------------------------------------
+
+# graph 1: page 7
+
+ggplot(combined2, aes(x = prices)) + 
+  geom_line(linetype = "dashed", 
+            aes(y = profit.notrigger.overall, color = "Before Triggering")) + 
+  geom_line(linetype = "solid", 
+            aes(y = profit.trigger.overall, color = "After Triggering")) + 
+  scale_colour_manual("", 
+                      breaks = c("Before Triggering", "After Triggering"),
+                      values = c("darkred", "black")) + 
+  xlab("Underlying Price (ST)") +
+  ylab("Profit") +
+  ggtitle("Product Profit at Maturity (Before & After Triggering)"
+  ) + 
+  annotate(geom = "point", x = l2 * S, y = l2 * S - S, size = 45, 
+           shape = 21, fill = "transparent", color = "red") +
+  annotate(geom = "label", x = 1.18 * S, y = -0.20 * S, size = 5, 
+           label = "When the safety level is triggered") + 
+  annotate(geom = "segment", linetype = "dashed", 
+           x = l2*S, xend = (l2 + 0.00000001) * S, 
+           y = -0.5 * S, yend = 0.5 * S,
+           colour = "blue") +
+  xlim(0.5 * S, 1.5 * S) + ylim(-0.5 * S, 0.5 * S)
+
+ggsave("../graphs/Profit_illustration_1(P7).png", width = 7.5, height = 6)
+
+#-------------------------------------------------------------------------------
+
+# Graph 2 - Page 8
+
+ggplot(combined2, aes(x = prices)) + 
+  geom_line(linetype = "dashed", 
+            aes(y = profit.notrigger.overall, color = "Before Triggering")) + 
+  geom_line(linetype = "solid", 
+            aes(y = profit.trigger.overall, color = "After Triggering")) + 
+  scale_colour_manual("", 
+                      breaks = c("Before Triggering", "After Triggering"),
+                      values = c("darkred", "black")) + 
+  xlab("Underlying Price (ST)") +
+  ylab("Profit") +
+  ggtitle("Product Profit at Maturity (Before & After Triggering)"
+  ) + 
+  annotate(geom = "point", x = (g1 + g2) * S / 2, y = 440, size = 45, 
+           shape = 21, fill = "transparent", color = "red") +
+  annotate(geom = "point", x = g2 * S, y = (g1 + h - 0.98) * S, 
+           size = 8, shape = 21, fill = "transparent")+
+  annotate(geom = "point", x = g1 * S, y = (g1 - 0.98) * S, 
+           size = 8, shape = 21, fill = "transparent")+
+  annotate(geom = 'label', x = 1.2*S, y = 0.04*S, size = 5, label = "g2") +
+  annotate(geom = 'label', x = 1.1*S, y = 0, size = 5, label = "g1") +
+  xlim(0.5 * S, 1.5 * S) + ylim(-0.5 * S, 0.5 * S)
+
+ggsave("../graphs/Profit_illustration_2(P8).png", width = 7.5, height = 6)
+
+#-------------------------------------------------------------------------------
+
+# Graph 3 - Page 8
+
+ggplot(combined2, aes(x = prices)) + 
+  geom_line(linetype = "dashed", 
+            aes(y = profit.notrigger.overall, color = "Before Triggering")) + 
+  geom_line(linetype = "solid", 
+            aes(y = profit.trigger.overall, color = "After Triggering")) + 
+  scale_colour_manual("", 
+                      breaks = c("Before Triggering", "After Triggering"),
+                      values = c("darkred", "black")) + 
+  xlab("Underlying Price (ST)") +
+  ylab("Profit") +
+  ggtitle("Product Profit at Maturity (Before & After Triggering)"
+  ) + 
+  annotate(geom = "point", x = (g2 + g3) * S / 2, y = 600, size = 45, 
+           shape = 21, fill = "transparent", color = "red") +
+  annotate(geom = "point", x = g3 * S, y = (g1 + 2 * h - 0.98) * S, 
+           size = 8, shape = 21, fill = "transparent") +
+  annotate(geom = "point", x = g2 * S, y = (g1 + h - 0.98) * S, 
+           size = 8, shape = 21, fill = "transparent") +
+  annotate(geom = 'label', x = 1.3 * S, y = 0.1 * S, size = 5, label = "g3") +
+  annotate(geom = 'label', x = 1.2 * S, y = 0.04 * S, size = 5, label = "g2") +
+  xlim(0.5 * S, 1.5 * S) + ylim(-0.5 * S, 0.5 * S)
+
+ggsave("../graphs/Profit_illustration_3(P9).png", width = 7.5, height = 6)
+
+#-------------------------------------------------------------------------------
+
+# 6.2.3 - Profit graph (split up) when the barrier is not triggered
+# on page 12 of PPT
 profit.notrigger.overall <- rowSums(cbind(profit.stock,
                                           profit.DI.put.notrigger,
                                           profit.call,
                                           profit.first.digital.call,
                                           profit.second.digital.call,
                                           as.vector(-0.02 * S)))
-# Transaction cost is removed
+# Here, 0.02*S commission fee are removed, 
+# so the overall line can have a better alignment
 
 # Generate a dataframe for all vectors
 # in order to plot the strategy payoffs using ggplot
@@ -380,7 +534,7 @@ results.notrigger <- data.frame(cbind(profit.stock,
 # This causes some warnings, but no impact on plotting
 results.notrigger[1:(floor(l1*S - minprice)), ] <- NA
 
-ggplot(results.notrigger / S, aes(x = prices / S)) + 
+ggplot(results.notrigger, aes(x = prices)) + 
   geom_line(linetype = "dashed", aes(y = profit.stock, color = "Stock")) + 
   geom_line(linetype = "dashed", 
             aes(y = profit.DI.put.notrigger, color = "DI European Put")) +
@@ -397,16 +551,16 @@ ggplot(results.notrigger / S, aes(x = prices / S)) +
                                  "Total Profit"),
                       values = c("darkred", "darkorange", "violet",  
                                  "darkgreen", "darkblue", "black")) + 
-  xlab("Underlying Price") +
+  xlab("Underlying Price (ST)") +
   ylab("Profit") +
-  ggtitle("Product Profit Percentage (R) at Maturity (Not Triggered)") + 
-  xlim(0.5, 1.5) + ylim(-0.5, 0.5)
+  ggtitle("Product Profit at Maturity (Not Triggered)") + 
+  xlim(0.5 * S, 1.5 * S) + ylim(-0.5 * S, 0.5 * S)
 
 ggsave("../graphs/Profit_Plot_Not_Triggered.png", width = 5.4, height = 4)
 
 #-------------------------------------------------------------------------------
 
-# 6.2.3 - Profit graph (split up) when the barrier is triggered
+# 6.2.4 - Profit graph (split up) when the barrier is triggered
 
 profit.trigger.overall <- rowSums(cbind(profit.stock,
                                         profit.DI.put.trigger,
@@ -424,7 +578,7 @@ results.trigger <- data.frame(cbind(profit.stock,
                                     profit.second.digital.call,
                                     profit.trigger.overall))
 
-ggplot(results.trigger / S, aes(x = prices / S)) + 
+ggplot(results.trigger, aes(x = prices)) + 
   geom_line(linetype = "dashed", aes(y = profit.stock, color = "Stock")) + 
   geom_line(linetype = "dashed", 
             aes(y = profit.DI.put.trigger, color = "DI European Put")) +
@@ -441,46 +595,12 @@ ggplot(results.trigger / S, aes(x = prices / S)) +
                                  "Total Profit"),
                       values = c("darkred", "darkorange", "violet",  
                                  "darkgreen", "darkblue", "black")) + 
-  xlab("Underlying Price") +
+  xlab("Underlying Price (ST)") +
   ylab("Profit") +
-  ggtitle("Product Profit Percentage (R) at Maturity (Not Triggered)") + 
-  xlim(0.5, 1.5) + ylim(-0.5, 0.5)
+  ggtitle("Product Profit at Maturity (Triggered)") + 
+  xlim(0.5 * S, 1.5 * S) + ylim(-0.5 * S, 0.5 * S)
 
 ggsave("../graphs/Profit_Plot_Triggered.png", width = 5.4, height = 4)
-
-#-------------------------------------------------------------------------------
-
-# 6.2.4 - Combined total profit when triggered/not triggered
-# Complete 6.2.2 & 6.2.3 first
-
-combined <- data.frame(cbind(profit.trigger.overall, profit.notrigger.overall))
-combined[1:(floor(l1*S - minprice)), 2] <- NA
-
-ggplot(combined / S, aes(x = prices / S)) + 
-  geom_line(linetype = "dashed", 
-            aes(y = profit.notrigger.overall, color="Before Triggering")) + 
-  geom_line(aes(y = profit.trigger.overall, color="After Triggering")) + 
-  scale_colour_manual("", 
-                      breaks = c("Before Triggering", "After Triggering"),
-                      values = c("darkred", "black")) + 
-  xlab("Underlying Price") +
-  ylab("Profit") +
-  ggtitle("Product Profit Percentage (R) at Maturity") + 
-  annotate(geom = "label", x = 1, y = -0.25, size = 3, 
-           label = "When the safety level is triggered") + 
-  annotate(geom = 'label', x = 1.2, y = 0, size = 3,
-           label = "Ladder Step 1, 2, 3") +
-  annotate(geom = "point", x = c(l2, g1, g2, g3), 
-           y = c(-628/S, 376/S, 580/S, 785/S), 
-           size = 7, shape= 21,
-           fill="transparent") +
-  annotate(geom = "segment", linetype = "dashed", 
-           x = l2, xend = l2 + 0.00000001, 
-           y = -0.5, yend = 0.5,
-           colour = "blue") +
-  xlim(0.5, 1.5) + ylim(-0.5, 0.5)
-
-ggsave("../graphs/Profit_Plot_Combined.png", width = 5.4, height = 4)
 
 #-------------------------------------------------------------------------------
 
@@ -636,7 +756,7 @@ ggplot(results.delta, aes(x = prices)) +
   geom_line(linetype = "solid", 
             aes(y = graph.delta.3month, color = "3 Month")) +
   geom_line(linetype = "solid",
-            aes(y = graph.delta.overall, color="6 Month")) +
+            aes(y = graph.delta.overall, color = "6 Month")) +
   scale_colour_manual(breaks = c("1 Day", "1 Week", 
                                  "1 Month", "3 Month", 
                                  "6 Month"),
@@ -644,13 +764,13 @@ ggplot(results.delta, aes(x = prices)) +
                                  "black")) + 
   xlab("Underlying Price") +
   ylab("Delta") +
-  ggtitle("Delta at Different Time to Maturity")
+  ggtitle("Total Delta at Different Time to Maturity")
 
 ggsave("../graphs/Delta_Different_TTM.png", width = 5.1, height = 4)
 
 #-------------------------------------------------------------------------------
 
-# cleaning up
+# cleaning up if you wish
 rm(prices)
 rm(payoff.stock, payoff.DI.put.notrigger, payoff.DI.put.trigger, payoff.call, 
    payoff.first.digital.call, payoff.second.digital.call)
@@ -658,3 +778,9 @@ rm(profit.stock, profit.DI.put.notrigger, profit.DI.put.trigger, profit.call,
    profit.first.digital.call, profit.second.digital.call,
    profit.notrigger.overall, profit.trigger.overall)
 
+rm(graph.delta.1day, graph.delta.1month, graph.delta.1week,
+   graph.delta.3month, graph.delta.6month)
+rm(graph.delta.call, graph.delta.DI.put, graph.delta.digital.one, 
+   graph.delta.digital.two, graph.delta.overall)
+rm(results.delta, results.delta.maturity, 
+   results.notrigger, results.trigger)
